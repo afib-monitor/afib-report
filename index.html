@@ -318,6 +318,12 @@ function strips(r) {
         el("rect", { x: x(Math.max(prev, a)), y: H - band - 2, width: Math.max(1, x(m.at) - x(Math.max(prev, a)) - 1.5), height: band, rx: 2, fill: `var(--${CAUSE[m.type] || "good"})` }, svg);
         prev = m.at;
       }
+      // a dot where the app placed each detected beat, on the trace (filled: good beat, hollow: poor)
+      for (const m of beatsM) {
+        if (m.at < a || m.at >= bnd) continue;
+        const good = m.type === 1, c = `var(--${CAUSE[m.type] || "good"})`;
+        el("circle", { cx: x(m.at), cy: y(ex.samples[m.at]), r: 4.2, fill: good ? "var(--trace)" : "var(--panel)", stroke: good ? "var(--panel)" : c, "stroke-width": good ? 1 : 1.6 }, svg);
+      }
       for (const m of pbM) {
         if (m.at < a || m.at >= bnd) continue;
         const col = m.type === 3 ? "var(--pb-low)" : "var(--pb)";
@@ -328,7 +334,7 @@ function strips(r) {
     }
     const p = document.createElement("p");
     p.textContent = (illustration ? "Layout example, not from this session. " : "") + notes[kind] +
-      ` Band below: signal quality of each beat (${goodN} of ${beatsM.length} good). Grid: 1 second.`;
+      ` Dots: beats the app detected (hollow: poor signal). Band below: signal quality of each beat (${goodN} of ${beatsM.length} good). Grid: 1 second.`;
     div.appendChild(p); box.appendChild(div);
   }
 }
