@@ -173,7 +173,10 @@ function parse(u8) {
     const kind = b(), t0 = u32(), fs = b(), ns = u16();
     const s = Array.from(new Int8Array(u8.buffer, p, ns)); p += ns;
     const nm = b(), marks = [];
-    for (let k = 0; k < nm; k++) marks.push({ at: u16(), type: b() });
+    // The app maps a detector position to a strip sample with pos / dec, but strip sample k holds the LAST detector
+    // sample of its block of dec, so every mark is stored (dec - 1) / dec of a strip sample late (3/4 on the watch).
+    // Moving it back one strip sample puts beat dots, quality-band breaks and the premature-beat mark on the pulse.
+    for (let k = 0; k < nm; k++) marks.push({ at: Math.max(0, u16() - 1), type: b() });
     r.examples.push({ kind, t0, fs, samples: s, marks });
   }
   r.app = new TextDecoder().decode(u8.slice(p));
@@ -214,8 +217,10 @@ function qualitySummary(r) {
 function figures(r, qs) {
   const good = r.pbGood.reduce((a, b) => a + b, 0), low = r.pbLow.reduce((a, b) => a + b, 0);
   const burden = r.pb.analysed ? 100 * r.pb.count / r.pb.analysed : 0;
+  const sqiShown = qs && qs.covered ? qs.share("good") : r.sqi;
   const items = [
-    { label: "Signal quality", value: `${r.sqi}<small>%</small>`, cls: "v-good", sub: qs.main && r.sqi < 90 ? `of the time; poor mostly from ${qs.mainName}` : "of the time good enough to analyse" },
+    /* one number everywhere: the same per-minute quality shares as the text below (minutes without data left out) */
+    { label: "Signal quality", value: `${sqiShown}<small>%</small>`, cls: "v-good", sub: qs.main && sqiShown < 90 ? `of the time; poor mostly from ${qs.mainName}` : "of the time good enough to analyse" },
     { label: "Heart rate", value: `${r.hr.avg}<small> bpm</small>`, cls: "v-hr", sub: `range ${r.hr.min}–${r.hr.max} bpm` },
     { label: "Atrial fibrillation", value: r.episodes.length ? `${r.afBurden.toFixed(1)}<small>%</small>` : "None", cls: r.episodes.length ? "v-af" : "none",
       sub: r.episodes.length ? `${r.episodes.length} episode${r.episodes.length > 1 ? "s" : ""}` : `<span class="dot" style="background: var(--good)"></span>not detected` },
@@ -280,8 +285,8 @@ function reading(r, qs) {
     lines.push(s + ".</p>");
   }
   const low = r.pbLow.reduce((a, b) => a + b, 0), good = r.pbGood.reduce((a, b) => a + b, 0);
-  if (low && !good) lines.push(`<p>All ${low} premature beats were found during poor signal. Movement and poor contact can produce such detections, so treat them with caution.</p>`);
-  else if (low) lines.push(`<p>${good} premature beats were found in good signal; ${low} more during poor signal are less reliable.</p>`);
+  if (low && !good) lines.push(`<p>${low === 1 ? "The premature beat was" : `All ${low} premature beats were`} found during poor signal. Movement and poor contact can produce such detections, so treat them with caution.</p>`);
+  else if (low) lines.push(`<p>${good} premature ${good === 1 ? "beat was" : "beats were"} found in good signal; ${low} more during poor signal ${low === 1 ? "is" : "are"} less reliable.</p>`);
   const tips = { move: "Keeping the arm still, for example by monitoring at rest or during sleep, gives a cleaner signal.", weak: "A weak signal often means a loose strap or cold skin: wear the watch a little tighter, above the wrist bone.", unclear: "An unclear pulse shape can come from poor contact, but also from an irregular rhythm; the examples below show what the app saw." };
   if (qs.main && poorShare > 10) lines.push(`<p class="tip">${tips[qs.main]}</p>`);
   box.innerHTML = lines.join("");
